@@ -1,6 +1,13 @@
 .idea
-examples/*
-*test*
+parser/build
+parser/tree-sitter-c
+parser/tree-sitter-java
+parser/tree-sitter-python
+*.json
+attacks/test.py
+attacks/funcs/ALERT.py
+attacks/funcs/get_variables.py
+attacks/funcs/mhm_space.py
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
