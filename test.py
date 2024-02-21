@@ -4,13 +4,16 @@ from transformers import AutoTokenizer, AutoModelForSequenceClassification
 from datasets import load_dataset
 from attacks import Greedy
 from datetime import datetime
+import torch
 import pdb
 
+
+device = torch.device("cuda:0" if torch.cuda.is_available() else "mps") #cpu
 
 def main():
     dataset = load_dataset("Zaib/java-vulnerability", data_files={"test": "test.csv"})
     tokenizer = AutoTokenizer.from_pretrained('mrm8488/codebert-base-finetuned-detect-insecure-code')
-    model = AutoModelForSequenceClassification.from_pretrained('mrm8488/codebert-base-finetuned-detect-insecure-code').to('mps')
+    model = AutoModelForSequenceClassification.from_pretrained('mrm8488/codebert-base-finetuned-detect-insecure-code').to(device)
 
     atk = Greedy(model, tokenizer, 'java')
 
