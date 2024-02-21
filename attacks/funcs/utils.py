@@ -1,13 +1,9 @@
 import torch
 import torch.nn as nn
 import random
-from tqdm import tqdm
-from torch.utils.data.dataset import Dataset
 import torch.nn.functional as F
-import numpy as np
 import copy
 from .run_parser import get_example_batch
-import pdb
 
 
 python_keywords = ['import', '', '[', ']', ':', ',', '.', '(', ')', '{', '}', 'not', 'is', '=', "+=", '-=', "<", ">",
@@ -286,33 +282,6 @@ def get_substitues(substitutes, tokenizer, mlm_model, use_bpe, substitutes_score
     return words
 
 
-def get_substitues_our(substitutes, tokenizer, mlm_model, use_bpe=1):
-    '''
-    将生成的substitued subwords转化为words
-    '''
-    # substitues L,k
-    # from this matrix to recover a word
-    words = []
-    sub_len, k = substitutes.size()  # sub-len, k
-
-    if sub_len == 0:
-        # 比如空格对应的subwords就是[a,a]，长度为0
-        return words
-
-    elif sub_len == 1:
-        # subwords就是本身
-        for i in substitutes[0]:
-            words.append(tokenizer._decode([int(i)]))
-            # 将id转为token.
-    else:
-        # word被分解成了多个subwords
-        if use_bpe == 1:
-            words = get_bpe_substitues(substitutes, tokenizer, mlm_model)
-        else:
-            return words
-    return words
-
-
 def get_masked_code_by_position(tokens: list, positions: dict):
     '''
     给定一段文本，以及需要被mask的位置,返回一组masked后的text
@@ -350,40 +319,6 @@ def get_masked_code_by_positions(tokens: list, positions: dict):
         masked_token_list.append(tmp)
 
     return masked_token_list
-
-
-def build_vocab(codes, limit=5000):
-    vocab_cnt = {"<str>": 0, "<char>": 0, "<int>": 0, "<fp>": 0}
-    for c in tqdm(codes):
-        for t in c:
-            if len(t) > 0:
-                if t[0] == '"' and t[-1] == '"':
-                    vocab_cnt["<str>"] += 1
-                elif t[0] == "'" and t[-1] == "'":
-                    vocab_cnt["<char>"] += 1
-                elif t[0] in "0123456789.":
-                    if 'e' in t.lower():
-                        vocab_cnt["<fp>"] += 1
-                    elif '.' in t:
-                        if t == '.':
-                            if t not in vocab_cnt.keys():
-                                vocab_cnt[t] = 0
-                            vocab_cnt[t] += 1
-                        else:
-                            vocab_cnt["<fp>"] += 1
-                    else:
-                        vocab_cnt["<int>"] += 1
-                elif t in vocab_cnt.keys():
-                    vocab_cnt[t] += 1
-                else:
-                    vocab_cnt[t] = 1
-    vocab_cnt = sorted(vocab_cnt.items(), key=lambda x: x[1], reverse=True)
-
-    idx2txt = ["<unk>"] + ["<pad>"] + [it[0] for index, it in enumerate(vocab_cnt) if index < limit - 1]
-    txt2idx = {}
-    for idx in range(len(idx2txt)):
-        txt2idx[idx2txt[idx]] = idx
-    return idx2txt, txt2idx
 
 
 __key_words__ = ["auto", "break", "case", "char", "const", "continue",
@@ -444,77 +379,6 @@ __special_ids__ = ["main",  # main function
                    "ceil", "floor", "abs", "fabs", "cabs", "frexp", "ldexp",
                    "modf", "fmod", "hypot", "ldexp", "poly", "matherr"]
 
-__parser__ = None
-
-
-def tokens2seq(_tokens):
-    '''
-    Return the source code, given the token sequence.
-    '''
-
-    seq = ""
-    for t in _tokens:
-        if t == "<INT>":
-            seq += "0 "
-        elif t == "<FP>":
-            seq += "0. "
-        elif t == "<STR>":
-            seq += "\"\" "
-        elif t == "<CHAR>":
-            seq += "'\0' "
-        else:
-            while "<__SPACE__>" in t:
-                t.replace("<__SPACE__>", " ")
-            while "<__BSLASH_N__>" in t:
-                t.replace("<__BSLASH_N__>", "\n")
-            while "<__BSLASH_R__>" in t:
-                t.replace("<__BSLASH_R__>", "\r")
-            seq += t + " "
-    return seq
-
-
-def getAST(_seq=""):
-    '''
-    Return the AST of a c/c++ file.
-    '''
-
-    global __parser__
-    if __parser__ is None:
-        __parser__ = pycparser.CParser()
-    _ast = __parser__.parse(_seq)
-    return _ast
-
-
-def getDecl(_seq="", _syms={}):
-    '''
-    Return all declaration names in an AST.
-    '''
-
-    _node = getAST(_seq)
-    if isinstance(_node, pycparser.c_ast.Decl):
-        if isinstance(_node.children()[0][1], pycparser.c_ast.TypeDecl):
-            _syms.add(_node.name)
-        elif isinstance(_node.children()[0][1], pycparser.c_ast.PtrDecl):
-            _syms.add(_node.name)
-        elif isinstance(_node.children()[0][1], pycparser.c_ast.ArrayDecl):
-            _syms.add(_node.name)
-        elif isinstance(_node.children()[0][1], pycparser.c_ast.FuncDecl):
-            _syms.add(_node.name)
-        elif isinstance(_node.children()[0][1], pycparser.c_ast.Struct):
-            _syms.add(_node.children()[0][1].name)
-            if not _node.name is None:
-                _syms.add(_node.name)
-        elif isinstance(_node.children()[0][1], pycparser.c_ast.Union):
-            _syms.add(_node.children()[0][1].name)
-            if not _node.name is None:
-                _syms.add(_node.name)
-    try:
-        for _child in _node.children():
-            _syms = getDecl(_child[1], _syms)
-    except:
-        _node.show()
-    return _syms
-
 
 def isUID(_text=""):
     '''
@@ -562,80 +426,6 @@ def getUID(_tokens=[], uids=[]):
                 ids[t] = [i]
     return ids
 
-
-class CodeDataset(Dataset):
-    def __init__(self, examples):
-        self.input_ids = examples
-
-    def __len__(self):
-        return len(self.input_ids)
-
-    def __getitem__(self, i):
-        return torch.tensor(self.input_ids[i])
-
-
-class CodePairDataset(Dataset):
-    def __init__(self, examples, args):
-        self.examples = examples
-        self.args = args
-
-    def __len__(self):
-        return len(self.examples)
-
-    def __getitem__(self, item):
-        # calculate graph-guided masked function
-        attn_mask_1 = np.zeros((self.args.code_length + self.args.data_flow_length,
-                                self.args.code_length + self.args.data_flow_length), dtype=np.bool)
-        # calculate begin index of node and max length of input
-        node_index = sum([i > 1 for i in self.examples[item].position_idx_1])
-        max_length = sum([i != 1 for i in self.examples[item].position_idx_1])
-        # sequence can attend to sequence
-        attn_mask_1[:node_index, :node_index] = True
-        # special tokens attend to all tokens
-        for idx, i in enumerate(self.examples[item].input_ids_1):
-            if i in [0, 2]:
-                attn_mask_1[idx, :max_length] = True
-        # nodes attend to code tokens that are identified from
-        for idx, (a, b) in enumerate(self.examples[item].dfg_to_code_1):
-            if a < node_index and b < node_index:
-                attn_mask_1[idx + node_index, a:b] = True
-                attn_mask_1[a:b, idx + node_index] = True
-        # nodes attend to adjacent nodes
-        for idx, nodes in enumerate(self.examples[item].dfg_to_dfg_1):
-            for a in nodes:
-                if a + node_index < len(self.examples[item].position_idx_1):
-                    attn_mask_1[idx + node_index, a + node_index] = True
-
-                    # calculate graph-guided masked function
-        attn_mask_2 = np.zeros((self.args.code_length + self.args.data_flow_length,
-                                self.args.code_length + self.args.data_flow_length), dtype=np.bool)
-        # calculate begin index of node and max length of input
-        node_index = sum([i > 1 for i in self.examples[item].position_idx_2])
-        max_length = sum([i != 1 for i in self.examples[item].position_idx_2])
-        # sequence can attend to sequence
-        attn_mask_2[:node_index, :node_index] = True
-        # special tokens attend to all tokens
-        for idx, i in enumerate(self.examples[item].input_ids_2):
-            if i in [0, 2]:
-                attn_mask_2[idx, :max_length] = True
-        # nodes attend to code tokens that are identified from
-        for idx, (a, b) in enumerate(self.examples[item].dfg_to_code_2):
-            if a < node_index and b < node_index:
-                attn_mask_2[idx + node_index, a:b] = True
-                attn_mask_2[a:b, idx + node_index] = True
-        # nodes attend to adjacent nodes
-        for idx, nodes in enumerate(self.examples[item].dfg_to_dfg_2):
-            for a in nodes:
-                if a + node_index < len(self.examples[item].position_idx_2):
-                    attn_mask_2[idx + node_index, a + node_index] = True
-
-        return (torch.tensor(self.examples[item].input_ids_1),
-                torch.tensor(self.examples[item].position_idx_1),
-                torch.tensor(attn_mask_1),
-                torch.tensor(self.examples[item].input_ids_2),
-                torch.tensor(self.examples[item].position_idx_2),
-                torch.tensor(attn_mask_2),
-                torch.tensor(self.examples[item].label))
 
 def get_importance_score(words_list: list, variable_names: list, tgt_model, tokenizer, label, ori_prob, device):
     """Compute the importance score of each variable"""
