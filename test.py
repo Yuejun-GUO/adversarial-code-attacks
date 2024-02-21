@@ -2,7 +2,7 @@ import json
 import time
 from transformers import AutoTokenizer, AutoModelForSequenceClassification
 from datasets import load_dataset
-from attacks import Greedy
+from attacks import Greedy, GeneticAlgorithm, ALERT, MHM
 from datetime import datetime
 import torch
 import pdb
@@ -15,8 +15,10 @@ def main():
     tokenizer = AutoTokenizer.from_pretrained('mrm8488/codebert-base-finetuned-detect-insecure-code')
     model = AutoModelForSequenceClassification.from_pretrained('mrm8488/codebert-base-finetuned-detect-insecure-code').to(device)
 
-    atk = Greedy(model, tokenizer, 'java')
-
+    # atk = Greedy(model, tokenizer, 'java')
+    # atk = GeneticAlgorithm(model, tokenizer, 'java', max_iter=5)
+    # atk = ALERT(model, tokenizer, 'java', max_iter=5)
+    atk = MHM(model, tokenizer, 'java', max_iter=5, _n_candi=30, _prob_threshold=1)
     model.eval()
     parameter_js = {
         "test_set": "Zaib/java-vulnerability",
@@ -24,25 +26,20 @@ def main():
         "model": 'mrm8488/codebert-base-finetuned-detect-insecure-code',
         "start_time": datetime.now().isoformat(),
         "programming language": 'java',
-        "attack method": 'Greedy attack'
+        "attack method": atk.name
     }
     with open('attack_result.json', 'w') as fout:
         json.dump(parameter_js, fout, indent=4)
         fout.write("\n")
 
     for index, item in enumerate(dataset['test']):
-        if index < 214:
-            continue
         start_time = time.time()
         code = item['code']
         label = item['label']
         result = atk(code, label)
         result["index"] = int(index)
         result['run_time_seconds'] = time.time() - start_time
-        if index == 216:
-            break
         with open('attack_result.json', 'a') as fout:
-            # fout.write(json.dumps(result) + "\n")
             json.dump(result, fout, indent=4)
             fout.write("\n")
             fout.flush()

@@ -5,7 +5,7 @@ class Attack(object):
     r"""
         Base class for all attacks
         """
-    def __init__(self, name, model: torch.nn.Module, tokenizer):
+    def __init__(self, name, model: torch.nn.Module, tokenizer, lang):
         r"""
         Initialize the attack
         Args:
@@ -16,7 +16,9 @@ class Attack(object):
         self.name = name
         self.model = model
         self.tokenizer = tokenizer
+        self.lang = lang
         self.device = next(model.parameters()).device
+        self.query_time = 0
 
     def forward(self, code, label=None, *args, **kwargs):
         r"""

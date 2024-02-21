@@ -3,9 +3,8 @@ import torch.nn as nn
 import random
 from tqdm import tqdm
 from torch.utils.data.dataset import Dataset
-import os
+import torch.nn.functional as F
 import numpy as np
-import csv
 import copy
 from .run_parser import get_example_batch
 import pdb
@@ -637,3 +636,24 @@ class CodePairDataset(Dataset):
                 torch.tensor(self.examples[item].position_idx_2),
                 torch.tensor(attn_mask_2),
                 torch.tensor(self.examples[item].label))
+
+def get_importance_score(words_list: list, variable_names: list, tgt_model, tokenizer, label, ori_prob, device):
+    """Compute the importance score of each variable"""
+    # 1. filter all keywords.
+    positions = get_identifier_posistions_from_code(words_list, variable_names)
+    if len(positions) == 0:
+        return None, None, None
+
+    importance_score = []
+    # 2. get Masked_tokens
+    masked_token_list, replace_token_positions = get_masked_code_by_position(words_list, positions)
+    for index, tokens in enumerate([words_list] + masked_token_list):
+        new_code = ' '.join(tokens)
+        new_feature = tokenizer([new_code], return_tensors="pt", truncation=True, padding='max_length').to(device)
+        logits = tgt_model(**new_feature).logits
+        logits = F.sigmoid(logits)
+        logits = torch.Tensor.cpu(logits).detach().numpy()[0]
+        prob = logits[label]
+        importance_score.append(ori_prob - prob)
+
+    return importance_score, replace_token_positions, positions, len(importance_score)
