@@ -158,7 +158,7 @@ class MHM(Attack):
             if res['status'].lower() == 's':
                 self.item["is_attack"] = True
                 self.item["is_success"] = True
-                self.item["adv_label"] = res["new_pred"]
+                self.item["adv_label"] = int(res["new_pred"])
                 self.item["adv_code"] = code
                 return self.item
         self.item["is_attack"] = True

@@ -1,2 +1,2 @@
-tree-sitter
+tree-sitter==0.20.4
 transformers==4.37.2

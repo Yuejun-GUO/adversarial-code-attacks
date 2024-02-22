@@ -197,7 +197,7 @@ class Greedy(Attack):
                     adv_code = get_example(final_code, tgt_word, candidate, self.lang)
                     self.item["is_attack"] = True
                     self.item["is_success"] = True
-                    self.item["adv_label"] = temp_label
+                    self.item["adv_label"] = int(temp_label)
                     self.item["adv_code"] = adv_code
                     self.item["replaced_words"] = replaced_words
                     return self.item
