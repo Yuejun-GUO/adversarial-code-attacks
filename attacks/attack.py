@@ -16,7 +16,7 @@ class Attack(object):
         self.name = name
         self.model = model
         self.tokenizer = tokenizer
-        self.lang = lang
+        self.lang = lang.lower()
         self.device = next(model.parameters()).device
         self.query_time = 0
 

@@ -16,6 +16,9 @@ import pdb
 class MHM(Attack):
     '''
     MHM attack.
+    Paper: Generating adversarial examples for holding robustness of source code processing models.
+    Conference: AAAI.
+    Year: 2020.
     '''
 
     def __init__(self, model, tokenizer, lang, max_iter=100, _n_candi=30, _prob_threshold=1):

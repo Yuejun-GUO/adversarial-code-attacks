@@ -184,11 +184,9 @@ def _tokenize(seq, tokenizer):
     keys = []
     index = 0
     for word in words:
-        # 并非直接tokenize这句话，而是tokenize了每个splited words.
         sub = tokenizer.tokenize(word)
         sub_words += sub
         keys.append([index, index + len(sub)])
-        # 将subwords对齐
         index += len(sub)
 
     return words, sub_words, keys

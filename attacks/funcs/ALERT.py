@@ -6,6 +6,9 @@ from ..attack import Attack
 class ALERT(Attack):
     '''
     ALERT attack.
+    Paper: Natural Attack for Pre-trained Models of Code.
+    Conference: ICSE.
+    Year: 2022.
     '''
 
     def __init__(self, model, tokenizer, lang, max_iter):
