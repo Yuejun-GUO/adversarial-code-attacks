@@ -7,6 +7,7 @@ parser/tree-sitter-python
 attacks/test.py
 attacks/funcs/get_variables.py
 attacks/funcs/CodeAttack.py
+.DS_Store
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
