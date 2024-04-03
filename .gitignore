@@ -6,6 +6,7 @@ parser/tree-sitter-python
 *.json
 attacks/test.py
 attacks/funcs/get_variables.py
+attacks/funcs/CodeAttack.py
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
