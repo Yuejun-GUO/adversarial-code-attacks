@@ -11,14 +11,16 @@ from .utils import (_tokenize, get_identifier_posistions_from_code,
 from transformers import (RobertaForMaskedLM, RobertaTokenizer)
 
 
-class Greedy(Attack):
+class GreedyAttack(Attack):
     '''
     Greedy attack.
     '''
 
-    def __init__(self, model, tokenizer, lang):
-        super().__init__("Greedy", model, tokenizer, lang)
+    def __init__(self, model, tokenizer, lang, max_iter=100, top_k=100):
+        super().__init__("Greedy Attack", model, tokenizer, lang)
         self.item = {}
+        self.max_iter = max_iter
+        self.top_k = top_k
         self.codebert_mlm = RobertaForMaskedLM.from_pretrained("microsoft/codebert-base-mlm").to(self.device)
         self.tokenizer_mlm = RobertaTokenizer.from_pretrained("microsoft/codebert-base-mlm")
 
@@ -62,7 +64,7 @@ class Greedy(Attack):
         input_ids_ = torch.tensor([self.tokenizer_mlm.convert_tokens_to_ids(sub_words)])
 
         word_predictions = self.codebert_mlm(input_ids_.to(self.device))[0].squeeze()  # seq-len(sub) vocab
-        word_pred_scores_all, word_predictions = torch.topk(word_predictions, 60, -1)  # seq-len k
+        word_pred_scores_all, word_predictions = torch.topk(word_predictions, self.top_k, -1)  # seq-len k
         word_predictions = word_predictions[1:len(sub_words) + 1, :]
         word_pred_scores_all = word_pred_scores_all[1:len(sub_words) + 1, :]
 
@@ -206,6 +208,9 @@ class Greedy(Attack):
                     if gap > most_gap:
                         most_gap = gap
                         candidate = substitute
+
+                if self.item["query_time"] >= self.max_iter:
+                    break
 
             if most_gap > 0:
                 current_prob = current_prob - most_gap

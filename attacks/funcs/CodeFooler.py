@@ -1,30 +1,48 @@
+import pdb
+
 import torch
 import copy
-from ..attack import Attack
 import torch.nn.functional as F
 import numpy as np
-from .run_parser import (get_identifiers, remove_comments_and_docstrings, get_example)
-from .utils import (_tokenize, get_identifier_posistions_from_code, map_chromesome,
+from ..attack import Attack
+from .run_parser import (get_identifiers, remove_comments_and_docstrings,
+                         get_example, )
+from .utils import (_tokenize, get_identifier_posistions_from_code,
                     is_valid_variable_name, get_substitues, is_valid_substitue,
-                    select_parents, mutate, crossover)
+                    get_importance_score_fooler)
 from transformers import (RobertaForMaskedLM, RobertaTokenizer)
-import random
 
 
-class GeneticAlgorithm(Attack):
+class CodeFooler(Attack):
     '''
-    Generaric algorithm attack.
+    TextFooler. Adapted from https://github.com/reddy-lab-code-research/CodeAttack/tree/main
+    Paper: Is BERT Really Robust? A Strong Baseline for Natural Language Attack on Text Classification and Entailment.
+    Conference: AAAI.
+    Year: 2020.
     '''
-    def __init__(self, model, tokenizer, lang, max_iter=100, top_k=100, max_iter_mutant=10):
-        super().__init__("GeneticAlgorithm", model, tokenizer, lang)
+
+    def __init__(self, model, tokenizer, lang,
+                 max_iter=100,
+                 import_score_threshold=-1,
+                 sim_score_threshold=0.7,
+                 synonym_num=50):
+        '''
+        :param import_score_threshold: Required mininum importance score
+        :param sim_score_threshold: Required minimum semantic similarity score
+        :param synonym_num: Number of synonyms to extract
+        '''
+        super().__init__("CodeFooler", model, tokenizer, lang)
         self.item = {}
-        self.max_iter = max_iter
-        self.top_k = top_k
-        self.max_iter_mutant = max_iter_mutant
+        self.model = model
+        self.tokenizer = tokenizer
         self.codebert_mlm = RobertaForMaskedLM.from_pretrained("microsoft/codebert-base-mlm").to(self.device)
         self.tokenizer_mlm = RobertaTokenizer.from_pretrained("microsoft/codebert-base-mlm")
+        self.max_iter = max_iter
+        self.import_score_threshold = import_score_threshold
+        self.sim_score_threshold = sim_score_threshold
+        self.synonym_num = synonym_num
 
-    def forward(self, code=None, label=None, initial_replace=None, *args, **kwargs):
+    def forward(self, code=None, label=None, *args, **kwargs):
         tokens = self.tokenizer([code], return_tensors="pt", truncation=True, padding='max_length').to(self.device)
         logits = self.model(**tokens).logits
         logits = F.sigmoid(logits)
@@ -45,14 +63,13 @@ class GeneticAlgorithm(Attack):
         else:
             substitutions = self.generate_substituions(code)
             self.item["search_space"] = substitutions
-            self.generate_adv(code, label, pred_label, pred_prob, substitutions, self.max_iter_mutant, initial_replace)
+            self.generate_adv(code, label, pred_prob, logits, substitutions)
         return self.item
 
     def generate_substituions(self, code):
         identifiers, code_tokens = get_identifiers(remove_comments_and_docstrings(code, self.lang), self.lang)
         processed_code = " ".join(code_tokens)
         words, sub_words, keys = _tokenize(processed_code, self.tokenizer_mlm)
-
         variable_names = []
         for name in identifiers:
             if ' ' in name[0].strip():
@@ -63,14 +80,16 @@ class GeneticAlgorithm(Attack):
 
         input_ids_ = torch.tensor([self.tokenizer_mlm.convert_tokens_to_ids(sub_words)])
 
-        word_predictions = self.codebert_mlm(input_ids_.to(self.device))[0].squeeze()  # seq-len(sub) vocab
-        word_pred_scores_all, word_predictions = torch.topk(word_predictions, self.top_k, -1)  # seq-len k
+        word_predictions = self.codebert_mlm(input_ids_.to(self.device))[0].squeeze()
+
+        word_pred_scores_all, word_predictions = torch.topk(word_predictions, min(self.synonym_num*3, word_predictions.shape[1]), -1)
         word_predictions = word_predictions[1:len(sub_words) + 1, :]
         word_pred_scores_all = word_pred_scores_all[1:len(sub_words) + 1, :]
 
         names_positions_dict = get_identifier_posistions_from_code(words, variable_names)
 
         variable_substitue_dict = {}
+
         with torch.no_grad():
             orig_embeddings = self.codebert_mlm.roberta(input_ids_.to(self.device))[0]
         cos = torch.nn.CosineSimilarity(dim=1, eps=1e-6)
@@ -101,7 +120,13 @@ class GeneticAlgorithm(Attack):
                     sims.append((i, sum(cos(orig_word_embed, new_word_embed)) / subwords_leng))
 
                 sims = sorted(sims, key=lambda x: x[1], reverse=True)
-                for i in range(int(nums_candis / 2)):
+                # filter the ones that have the cosine similarity smaller than the pre-defined threshold
+                filtered_sims = [item for item in sims if item[1].item() >= self.sim_score_threshold]
+
+                # keep the top synonym_num candidates
+                filtered_sims = filtered_sims[:self.synonym_num]
+
+                for i in range(len(filtered_sims)):
                     similar_substitutes.append(substitutes[:, sims[i][0]].reshape(subwords_leng, -1))
                     similar_word_pred_scores.append(word_pred_scores[:, sims[i][0]].reshape(subwords_leng, -1))
 
@@ -114,6 +139,7 @@ class GeneticAlgorithm(Attack):
                                              1,
                                              similar_word_pred_scores,
                                              0)
+
                 all_substitues += substitutes
             all_substitues = set(all_substitues)
             for tmp_substitue in all_substitues:
@@ -128,13 +154,13 @@ class GeneticAlgorithm(Attack):
 
         return variable_substitue_dict
 
-    def generate_adv(self, code, label, pred_label, pred_prob, substitutions, max_iter_mutant, initial_replace=None):
-        orig_prob = pred_prob
+    def generate_adv(self, code, label, pred_prob, logits, substitutions):
         current_prob = pred_prob
         identifiers, code_tokens = get_identifiers(code, self.lang)
         processed_code = " ".join(code_tokens)
 
         words, sub_words, keys = _tokenize(processed_code, self.tokenizer_mlm)
+
         variable_names = list(substitutions.keys())
 
         if len(variable_names) == 0:  # no variable exists
@@ -142,101 +168,82 @@ class GeneticAlgorithm(Attack):
             self.item["note"] = "This code does not include any variable."
             return self.item
 
-        names_positions_dict = get_identifier_posistions_from_code(words, variable_names)
+        importance_score, replace_token_positions, names_positions_dict, query_count = get_importance_score_fooler(words,
+                                                                                                            variable_names,
+                                                                                                            self.model,
+                                                                                                            self.tokenizer,
+                                                                                                            label,
+                                                                                                            logits,
+                                                                                                            self.device)
+        self.item["query_time"] += query_count
+        if importance_score is None:
+            self.item["is_attack"] = False
+            self.item["note"] = "Variables do not have substitutes."
+            return self.item
 
-        variable_substitue_dict = {}
+        token_pos_to_score_pos = {}
 
-        for tgt_word in names_positions_dict.keys():
-            variable_substitue_dict[tgt_word] = substitutions[tgt_word]
+        for i, token_pos in enumerate(replace_token_positions):
+            token_pos_to_score_pos[token_pos] = i
+        # recompute the importance score
+        names_to_importance_score = {}
 
-        fitness_values = []
-        base_chromesome = {word: word for word in variable_substitue_dict.keys()}
-        population = [base_chromesome]
-        for tgt_word in variable_substitue_dict.keys():
-            if initial_replace is None:
-                initial_candidate = tgt_word
-                _the_best_candidate = -1
-                most_gap = 0.0
-                for a_substitue in variable_substitue_dict[tgt_word]:
-                    temp_code = get_example(code, tgt_word, a_substitue, self.lang)
-                    new_feature = self.tokenizer([temp_code], return_tensors="pt", truncation=True,
-                                                 padding='max_length').to(self.device)
-                    logits = self.model(**new_feature).logits
-                    self.item["query_time"] += 1
-                    logits = F.sigmoid(logits)
-                    logits = torch.Tensor.cpu(logits).detach().numpy()[0]
-                    temp_prob = logits[label]
-                    gap = current_prob - temp_prob
-                    if gap > most_gap:
-                        most_gap = gap
-                        initial_candidate = a_substitue
+        for name in names_positions_dict.keys():
+            total_score = 0.0
+            positions = names_positions_dict[name]
+            for token_pos in positions:
+                total_score += importance_score[token_pos_to_score_pos[token_pos]]
 
-                    if self.item["query_time"] >= self.max_iter:
-                        break
-                if _the_best_candidate == -1:
-                    initial_candidate = tgt_word
-            else:
-                initial_candidate = initial_replace[tgt_word]
+            names_to_importance_score[name] = total_score
 
-            temp_chromesome = copy.deepcopy(base_chromesome)
-            temp_chromesome[tgt_word] = initial_candidate
-            population.append(temp_chromesome)
-            temp_fitness, temp_label = self.compute_fitness(temp_chromesome, pred_prob, pred_label, code)
-            fitness_values.append(temp_fitness)
+        sorted_list_of_names = sorted(names_to_importance_score.items(), key=lambda x: x[1], reverse=True)
+        sorted_list_of_names = [item for item in sorted_list_of_names if item[1] >= self.import_score_threshold]
 
-        cross_probability = 0.7
-        for i in range(max_iter_mutant):
-            _temp_mutants = []
-            p = random.random()
-            chromesome_1, index_1, chromesome_2, index_2 = select_parents(population)
-            if p < cross_probability:  # 进行crossover
-                if chromesome_1 == chromesome_2:
-                    child_1 = mutate(chromesome_1, variable_substitue_dict)
-                    continue
-                child_1, child_2 = crossover(chromesome_1, chromesome_2)
-                if child_1 == chromesome_1 or child_1 == chromesome_2:
-                    child_1 = mutate(chromesome_1, variable_substitue_dict)
-            else:  # 进行mutates
-                child_1 = mutate(chromesome_1, variable_substitue_dict)
-            _temp_mutants.append(child_1)
+        # sort according to importance_score
+        final_code = copy.deepcopy(code)
+        replaced_words = {}
+        self.item["is_attack"] = True
+        self.item["is_success"] = False
 
-            mutate_fitness_values = []
-            for mutant in _temp_mutants:
-                _temp_code = map_chromesome(mutant, code, self.lang)
-                new_feature = self.tokenizer([_temp_code], return_tensors="pt", truncation=True,
-                                             padding='max_length').to(self.device)
+        for name_and_score in sorted_list_of_names:
+            tgt_word = name_and_score[0]
+            all_substitues = substitutions[tgt_word]
+            most_gap = 0.0
+            candidate = None
+            for index, substitute in enumerate(all_substitues):
+                temp_code = get_example(final_code, tgt_word, substitute, self.lang)
+                new_feature = self.tokenizer([temp_code], return_tensors="pt", truncation=True, padding='max_length').to(self.device)
                 logits = self.model(**new_feature).logits
                 self.item["query_time"] += 1
                 logits = F.sigmoid(logits)
                 logits = torch.Tensor.cpu(logits).detach().numpy()[0]
+                temp_prob = logits[label]
                 temp_label = np.argmax(logits)
                 if temp_label != label:
-                    adv_code = mutant
+                    candidate = substitute
+                    replaced_words[tgt_word] = candidate
+                    adv_code = get_example(final_code, tgt_word, candidate, self.lang)
                     self.item["is_attack"] = True
                     self.item["is_success"] = True
                     self.item["adv_label"] = int(temp_label)
                     self.item["adv_code"] = adv_code
+                    self.item["replaced_words"] = replaced_words
                     return self.item
                 else:
-                    self.item["is_attack"] = True
+                    gap = current_prob - temp_prob
+                    if gap > most_gap:
+                        most_gap = gap
+                        candidate = substitute
+                if self.item["query_time"] >= self.max_iter:
+                    break
 
-                _tmp_fitness = orig_prob - logits[pred_label]
-                mutate_fitness_values.append(_tmp_fitness)
+            if most_gap > 0:
+                current_prob = current_prob - most_gap
+                final_code = get_example(final_code, tgt_word, candidate, self.lang)
+                replaced_words[tgt_word] = candidate
+            else:
+                replaced_words[tgt_word] = tgt_word
+            self.item["replaced_words"] = replaced_words
+        return self.item
 
-            for index, fitness_value in enumerate(mutate_fitness_values):
-                min_value = min(fitness_values)
-                if fitness_value > min_value:
-                    min_index = fitness_values.index(min_value)
-                    population[min_index] = _temp_mutants[index]
-                    fitness_values[min_index] = fitness_value
 
-    def compute_fitness(self, chromesome, orig_prob, orig_label, code):
-        temp_code = map_chromesome(chromesome, code, self.lang)
-        new_feature = self.tokenizer([temp_code], return_tensors="pt", truncation=True,
-                                     padding='max_length').to(self.device)
-        logits = self.model(**new_feature).logits
-        logits = F.sigmoid(logits)
-        logits = torch.Tensor.cpu(logits).detach().numpy()[0]
-        prob = logits[orig_label]
-        fitness_value = orig_prob -prob
-        return fitness_value, prob

@@ -1,4 +1,4 @@
-from .greedy import Greedy
+from .GreedyAttack import GreedyAttack
 from .GeneticAlgorithm import GeneticAlgorithm
 from ..attack import Attack
 
@@ -11,13 +11,15 @@ class ALERT(Attack):
     Year: 2022.
     '''
 
-    def __init__(self, model, tokenizer, lang, max_iter):
+    def __init__(self, model, tokenizer, lang, max_iter=100, top_k=100, max_iter_mutant=10):
         super().__init__("ALERT", model, tokenizer, lang)
         self.max_iter = max_iter
+        self.top_k = top_k
+        self.max_iter_mutant = max_iter_mutant
 
     def forward(self, code=None, label=None, *args, **kwargs):
-        atk_1 = Greedy(self.model, self.tokenizer, self.lang)
-        atk_2 = GeneticAlgorithm(self.model, self.tokenizer, self.lang, self.max_iter)
+        atk_1 = GreedyAttack(self.model, self.tokenizer, self.lang, self.max_iter, self.top_k)
+        atk_2 = GeneticAlgorithm(self.model, self.tokenizer, self.lang, self.max_iter, self.top_k, self.max_iter_mutant)
         result_1 = atk_1(code, label)
         if result_1['is_attack'] and not result_1['is_success']:
             initial_replace = result_1['replaced_words']

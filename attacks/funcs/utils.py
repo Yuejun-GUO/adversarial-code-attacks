@@ -1,3 +1,5 @@
+import pdb
+import numpy as np
 import torch
 import torch.nn as nn
 import random
@@ -121,8 +123,6 @@ def map_chromesome(chromesome: dict, code: str, lang: str) -> str:
     return temp_replace
 
 
-input = ["0ab", "\ndsd", "说啊", "'z'", "for"]
-
 from keyword import iskeyword
 
 
@@ -166,7 +166,7 @@ def is_valid_variable_name(name: str, lang: str) -> bool:
 
 def is_valid_substitue(substitute: str, tgt_word: str, lang: str) -> bool:
     '''
-    判断生成的substitues是否valid，如是否满足命名规范
+    determine the validity of substitues
     '''
     is_valid = True
 
@@ -282,7 +282,7 @@ def get_substitues(substitutes, tokenizer, mlm_model, use_bpe, substitutes_score
 
 def get_masked_code_by_position(tokens: list, positions: dict):
     '''
-    给定一段文本，以及需要被mask的位置,返回一组masked后的text
+    given a code and the position needed to be masked，return the masked code
     Example:
         tokens: [a,b,c]
         positions: [0,2]
@@ -443,5 +443,48 @@ def get_importance_score(words_list: list, variable_names: list, tgt_model, toke
         logits = torch.Tensor.cpu(logits).detach().numpy()[0]
         prob = logits[label]
         importance_score.append(ori_prob - prob)
+
+    return importance_score, replace_token_positions, positions, len(importance_score)
+
+
+def get_changed_code_by_position(tokens: list, positions: dict):
+    '''
+    given a code and the position to be removed，return the updated code
+    Example:
+        tokens: [a,b,c]
+        positions: [0,2]
+        Return:
+            [b, c]
+            [a, b]
+    '''
+    masked_token_list = []
+    replace_token_positions = []
+    for variable_name in positions.keys():
+        for pos in positions[variable_name]:
+            masked_token_list.append(tokens[0:pos] + tokens[pos + 1:])
+            replace_token_positions.append(pos)
+
+    return masked_token_list, replace_token_positions
+
+
+def get_importance_score_fooler(words_list: list, variable_names: list, tgt_model, tokenizer, label, ori_logits, device):
+    """Compute the importance score of each variable"""
+    # 1. filter all keywords.
+    positions = get_identifier_posistions_from_code(words_list, variable_names)
+    if len(positions) == 0:
+        return None, None, None
+
+    importance_score = []
+    # 2. get deleted_tokens
+    deleted_token_list, replace_token_positions = get_changed_code_by_position(words_list, positions)
+    for index, tokens in enumerate([words_list] + deleted_token_list):
+        new_code = ' '.join(tokens)
+        new_feature = tokenizer([new_code], return_tensors="pt", truncation=True, padding='max_length').to(device)
+        logits = tgt_model(**new_feature).logits
+        logits = F.sigmoid(logits)
+        logits = torch.Tensor.cpu(logits).detach().numpy()[0]
+        pred_label = np.argmax(logits)
+        imp_score = ori_logits[label] - logits[label] if pred_label==label else ori_logits[label] - logits[label] + (logits[pred_label] - ori_logits[pred_label])
+        importance_score.append(imp_score)
 
     return importance_score, replace_token_positions, positions, len(importance_score)
