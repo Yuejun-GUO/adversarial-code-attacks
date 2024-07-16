@@ -15,12 +15,13 @@ class GeneticAlgorithm(Attack):
     '''
     Generaric algorithm attack.
     '''
-    def __init__(self, model, tokenizer, lang, max_iter=100, top_k=100, max_iter_mutant=10):
+    def __init__(self, model, tokenizer, lang, max_iter=100, top_k=100, max_iter_mutant=10, cross_probability=0.7):
         super().__init__("GeneticAlgorithm", model, tokenizer, lang)
         self.item = {}
         self.max_iter = max_iter
         self.top_k = top_k
         self.max_iter_mutant = max_iter_mutant
+        self.cross_probability = cross_probability
         self.codebert_mlm = RobertaForMaskedLM.from_pretrained("microsoft/codebert-base-mlm").to(self.device)
         self.tokenizer_mlm = RobertaTokenizer.from_pretrained("microsoft/codebert-base-mlm")
 

@@ -21,10 +21,11 @@ class MHM(Attack):
     Year: 2020.
     '''
 
-    def __init__(self, model, tokenizer, lang, max_iter=100, _n_candi=30, _prob_threshold=1):
+    def __init__(self, model, tokenizer, lang, max_iter=100, top_k=60, _n_candi=30, _prob_threshold=1):
         super().__init__("MHM Origin attack", model, tokenizer, lang)
         self.item = {}
         self.max_iter = max_iter
+        self.top_k = top_k
         self._n_candi = _n_candi
         self._prob_threshold = _prob_threshold
         self.model_mlm = RobertaForMaskedLM.from_pretrained("microsoft/codebert-base-mlm").to(self.device)
@@ -70,7 +71,7 @@ class MHM(Attack):
         input_ids_ = torch.tensor([self.tokenizer_mlm.convert_tokens_to_ids(sub_words)])
 
         word_predictions = self.model_mlm(input_ids_.to(self.device))[0].squeeze()  # seq-len(sub) vocab
-        word_pred_scores_all, word_predictions = torch.topk(word_predictions, 60, -1)  # seq-len k
+        word_pred_scores_all, word_predictions = torch.topk(word_predictions, self.top_k, -1)  # seq-len k
         word_predictions = word_predictions[1:len(sub_words) + 1, :]
         word_pred_scores_all = word_pred_scores_all[1:len(sub_words) + 1, :]
 

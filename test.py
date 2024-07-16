@@ -9,7 +9,6 @@ import sys
 import torch
 import pdb
 
-
 device = torch.device("cuda:0" if torch.cuda.is_available() else "mps")
 print(device)
 
@@ -42,11 +41,13 @@ def main():
     # params for Generatic Algorithm attack and the ALERT attack
     parser.add_argument("--max_iter_mutant", type=int, default=5,
                         help="Maximum number of mutation iterations.")
+    parser.add_argument("--cross_probability", type=float, default=0.7,
+                        help="Cross probability in the genetic algorithm for mutation.")
 
     # params for MHM attack
-    parser.add_argument("--_n_candi", type=int, default=30,
+    parser.add_argument("--n_candi", type=int, default=30,
                         help="Maximum number of variable renaming candidates.")
-    parser.add_argument("--_prob_threshold", type=float, default=1,
+    parser.add_argument("--prob_threshold", type=float, default=1,
                         help="Threshold for the acceptance rate.")
 
     # params for CodeFooler
@@ -71,33 +72,70 @@ def main():
     if args.attack.lower() == "mhm":
         atk = MHM(model, tokenizer, args.data_lang,
                   max_iter=args.max_iter,
-                  _n_candi=30,
-                  _prob_threshold=1)
+                  top_k=args.top_k,
+                  _n_candi=args.n_candi,
+                  _prob_threshold=args.prob_threshold
+                  )
+        atk_params = {
+            "max_iter": args.max_iter,
+            "top_k": args.top_k,
+            "n_candi": args.n_candi,
+            "prob_threshold": args.prob_threshold,
+        }
     elif args.attack.lower() == "greedy":
         atk = GreedyAttack(model, tokenizer, args.data_lang,
                            max_iter=args.max_iter,
                            top_k=args.top_k)
+        atk_params = {
+            "max_iter": args.max_iter,
+            "top_k": args.top_k,
+        }
     elif args.attack.lower() == "ga":
         atk = GeneticAlgorithm(model, tokenizer, args.data_lang,
                                max_iter=args.max_iter,
                                top_k=args.top_k,
-                               max_iter_mutant=args.max_iter_mutant)
+                               max_iter_mutant=args.max_iter_mutant,
+                               cross_probability=args.cross_probability)
+        atk_params = {
+            "max_iter": args.max_iter,
+            "top_k": args.top_k,
+            "max_iter_mutant": args.max_iter_mutant,
+            "cross_probability": args.cross_probability,
+        }
     elif args.attack.lower() == "alert":
         atk = ALERT(model, tokenizer, args.data_lang,
                     max_iter=args.max_iter,
                     top_k=args.top_k,
-                    max_iter_mutant=args.max_iter_mutant)
+                    max_iter_mutant=args.max_iter_mutant,
+                    cross_probability=args.cross_probability,)
+        atk_params = {
+            "max_iter": args.max_iter,
+            "top_k": args.top_k,
+            "max_iter_mutant": args.max_iter_mutant,
+            "cross_probability": args.cross_probability,
+        }
     elif args.attack.lower() == "codeattack":
         atk = CodeAttack(model, tokenizer, args.data_lang,
                          max_iter=args.max_iter,
-                         use_imp=True,
-                         theta=0.4)
+                         use_imp=args.use_imp,
+                         theta=args.theta)
+        atk_params = {
+            "max_iter": args.max_iter,
+            "use_imp": args.use_imp,
+            "theta": args.theta,
+        }
     elif args.attack.lower() == "codefooler":
         atk = CodeFooler(model, tokenizer, args.data_lang,
                          max_iter=args.max_iter,
                          import_score_threshold=args.import_score_threshold,
                          sim_score_threshold=args.sim_score_threshold,
                          synonym_num=args.synonym_num)
+        atk_params = {
+            "max_iter": args.max_iter,
+            "import_score_threshold": args.import_score_threshold,
+            "sim_score_threshold": args.sim_score_threshold,
+            "synonym_num": args.synonym_num,
+        }
     else:
         sys.exit("Attack not supported.")
 
@@ -108,7 +146,8 @@ def main():
         "model": args.tgt_model,
         "start_time": datetime.now().isoformat(),
         "programming language": args.data_lang,
-        "attack method": atk.name
+        "attack method": atk.name,
+        "atk_params": atk_params,
     }
 
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
