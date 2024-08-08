@@ -1,12 +1,8 @@
 .idea
-parser/build
 parser/tree-sitter-c
 parser/tree-sitter-java
 parser/tree-sitter-python
 *.json
-attacks/test.py
-attacks/funcs/get_variables.py
-attacks/funcs/CodeAttack.py
 .DS_Store
 
 # Byte-compiled / optimized / DLL files

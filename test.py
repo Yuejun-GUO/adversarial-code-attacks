@@ -5,12 +5,12 @@ from datasets import load_dataset
 from attacks import GreedyAttack, GeneticAlgorithm, ALERT, MHM, CodeAttack, CodeFooler
 from datetime import datetime
 import argparse
+import os
 import sys
 import torch
 import pdb
 
-device = torch.device("cuda:0" if torch.cuda.is_available() else "mps")
-print(device)
+device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
 
 def lang_case_insensitive_choices(value):
@@ -23,7 +23,7 @@ def lang_case_insensitive_choices(value):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--attack", type=str, default="codefooler",
+    parser.add_argument("--attack", type=str, default="codeattack",
                         choices=['greedy', 'mhm', 'ga', 'alert', 'codefooler', 'codeattack'])
     parser.add_argument("--test_dataset", type=str, default="Zaib/java-vulnerability",
                         help="Dataset card on hugginface.")
@@ -34,38 +34,38 @@ def main():
     parser.add_argument("--tgt_model", type=str, default="mrm8488/codebert-base-finetuned-detect-insecure-code",
                         help="Model card on huggingface for vulnerability detection.")
     parser.add_argument("--max_iter", type=int, default=100,
-                        help="Maximum number of attack iterations. Apply to all attacks.")
+                        help="Apply to all attacks. Maximum number of attack iterations.")
     parser.add_argument("--top_k", type=int, default=60,
-                        help="Top k tokens. Apply to 'greedy', 'ga', 'alert', 'codeattack'")
+                        help="Apply to all attacks. Top k tokens.")
+    parser.add_argument("--results_dir", type=str, default="results",
+                        help="The dir to store results.")
 
-    # params for Generatic Algorithm attack and the ALERT attack
+    # params for Genetic Algorithm attack and the ALERT attack
     parser.add_argument("--max_iter_mutant", type=int, default=5,
-                        help="Maximum number of mutation iterations.")
+                        help="Only used in the Genetic and ALERT attack. Maximum number of mutation iterations.")
     parser.add_argument("--cross_probability", type=float, default=0.7,
-                        help="Cross probability in the genetic algorithm for mutation.")
+                        help="Only used in the Genetic and ALERT attack. Cross probability in the genetic algorithm "
+                             "for mutation.")
 
     # params for MHM attack
     parser.add_argument("--n_candi", type=int, default=30,
-                        help="Maximum number of variable renaming candidates.")
+                        help="Only used in MHM attack. Maximum number of variable renaming candidates.")
     parser.add_argument("--prob_threshold", type=float, default=1,
-                        help="Threshold for the acceptance rate.")
+                        help="Only used in MHM attack. Threshold for the acceptance rate.")
 
     # params for CodeFooler
     parser.add_argument("--import_score_threshold", type=float, default=-1,
-                        help="Required mininum importance score.")
+                        help="Only used in CodeFooler. Required mininum importance score.")
     parser.add_argument("--sim_score_threshold", type=float, default=0.7,
-                        help="Required minimum semantic similarity score.")
+                        help="Only used in CodeFooler. Required minimum semantic similarity score.")
     parser.add_argument("--synonym_num", type=int, default=50,
-                        help="Number of synonyms to extract.")
+                        help="Only used in CodeFooler. Number of synonyms to extract.")
 
-    # params for CodeAttack
-    parser.add_argument("--use_imp", action='store_true',
-                        help="A boolean flag to either attack random words or attack only important/vulnerable words.")
-    parser.add_argument("--theta", type=float, default=0.4,
-                        help="Only used in CodeAttacks. The percentage of tokens to attack.")
     args = parser.parse_args()
 
     dataset = load_dataset(args.test_dataset, data_files={"test": "test.csv"})
+    if not args.tgt_tokenizer:
+        args.tgt_tokenizer = args.tgt_model
     tokenizer = AutoTokenizer.from_pretrained(args.tgt_tokenizer)
     model = AutoModelForSequenceClassification.from_pretrained(args.tgt_model).to(device)
 
@@ -116,13 +116,10 @@ def main():
         }
     elif args.attack.lower() == "codeattack":
         atk = CodeAttack(model, tokenizer, args.data_lang,
-                         max_iter=args.max_iter,
-                         use_imp=args.use_imp,
-                         theta=args.theta)
+                         max_iter=args.max_iter,)
         atk_params = {
             "max_iter": args.max_iter,
-            "use_imp": args.use_imp,
-            "theta": args.theta,
+            "top_k": args.top_k,
         }
     elif args.attack.lower() == "codefooler":
         atk = CodeFooler(model, tokenizer, args.data_lang,
@@ -149,14 +146,15 @@ def main():
         "attack method": atk.name,
         "atk_params": atk_params,
     }
-
+    os.makedirs(args.results_dir, exist_ok=True)
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    file_name = f'result_{args.attack}_{timestamp}.json'
+    file_name = f'{args.results_dir}/result_{args.attack}_{timestamp}.json'
     with open(file_name, 'w') as fout:
         json.dump(parameter_js, fout, indent=4)
         fout.write("\n")
 
     for index, item in enumerate(dataset['test']):
+        print(f"{args.attack}: {index}, {device}")
         start_time = time.time()
         code = item['code']
         label = item['label']

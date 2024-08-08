@@ -307,7 +307,7 @@ def get_masked_code_by_positions(tokens: list, positions: dict):
         tokens: [a,b,a,c]
         positions: [0,2]
         Return:
-            [<mask>, b, <mask>, c]
+            [<unk>, b, <unk>, c]
     '''
     masked_token_list = []
     for variable_name in positions.keys():
@@ -488,3 +488,44 @@ def get_importance_score_fooler(words_list: list, variable_names: list, tgt_mode
         importance_score.append(imp_score)
 
     return importance_score, replace_token_positions, positions, len(importance_score)
+
+
+def get_importance_score_code(words_list: list, variable_names: list, tgt_model, tokenizer, label, ori_logits, device):
+    """Compute the influence score of each variable"""
+    # 1. filter all keywords.
+    positions = get_identifier_posistions_from_code(words_list, variable_names)
+    if len(positions) == 0:
+        return None, None, None
+
+    importance_score = []
+    # 2. get masked_tokens
+    masked_token_list, replace_token_positions = get_mask_code_by_positions_codeattack(words_list, positions)
+    for index, tokens in enumerate([words_list] + masked_token_list):
+        new_code = ' '.join(tokens)
+        new_feature = tokenizer([new_code], return_tensors="pt", truncation=True, padding='max_length').to(device)
+        logits = tgt_model(**new_feature).logits
+        logits = F.sigmoid(logits)
+        logits = torch.Tensor.cpu(logits).detach().numpy()[0]
+        imp_score = ori_logits[label]-logits[label]
+        importance_score.append(imp_score)
+
+    return importance_score, replace_token_positions, positions, len(importance_score)
+
+
+def get_mask_code_by_positions_codeattack(tokens: list, positions: dict):
+    '''
+    given a code and the positions to mask, return the masked code
+    Example:
+        tokens: [a,b,a,c]
+        positions: [0,2]
+        Return:
+            [<mask>, b, <mask>, c]
+    '''
+    masked_token_list = []
+    replace_token_positions = []
+    for variable_name in positions.keys():
+        for pos in positions[variable_name]:
+            masked_token_list.append(tokens[0:pos] + ['<mask>'] + tokens[pos + 1:])
+            replace_token_positions.append(pos)
+
+    return masked_token_list, replace_token_positions
