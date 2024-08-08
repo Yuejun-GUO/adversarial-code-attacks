@@ -10,7 +10,7 @@ import sys
 import torch
 import pdb
 
-device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+device = torch.device("cuda:0" if torch.cuda.is_available() else "mps")
 
 
 def lang_case_insensitive_choices(value):
@@ -146,6 +146,7 @@ def main():
         "attack method": atk.name,
         "atk_params": atk_params,
     }
+
     os.makedirs(args.results_dir, exist_ok=True)
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     file_name = f'{args.results_dir}/result_{args.attack}_{timestamp}.json'
@@ -154,7 +155,6 @@ def main():
         fout.write("\n")
 
     for index, item in enumerate(dataset['test']):
-        print(f"{args.attack}: {index}, {device}")
         start_time = time.time()
         code = item['code']
         label = item['label']
