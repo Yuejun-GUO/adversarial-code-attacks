@@ -1,7 +1,7 @@
 import json
 import time
 from transformers import AutoTokenizer, AutoModelForSequenceClassification
-from datasets import load_dataset
+from datasets import load_dataset, Value
 from attacks import GreedyAttack, GeneticAlgorithm, ALERT, MHM, CodeAttack, CodeFooler
 from datetime import datetime
 import argparse
@@ -63,7 +63,16 @@ def main():
 
     args = parser.parse_args()
 
-    dataset = load_dataset(args.test_dataset, data_files={"test": "test.csv"})
+    dataset = load_dataset(args.test_dataset, split='test')
+    if 'func' in dataset.column_names:
+        dataset = dataset.rename_column('func', 'code')
+
+    if 'target' in dataset.column_names:
+        dataset = dataset.rename_column('target', 'label')
+    
+    dataset = dataset.map(lambda example: {'label': min(example['label'], 1)})
+    dataset = dataset.cast_column('label',  Value("int64"))
+
     if not args.tgt_tokenizer:
         args.tgt_tokenizer = args.tgt_model
     tokenizer = AutoTokenizer.from_pretrained(args.tgt_tokenizer)
@@ -138,7 +147,7 @@ def main():
 
     parameter_js = {
         "test_set": args.test_dataset,
-        "test_size": len(dataset['test']),
+        "test_size": len(dataset),
         "tokenizer": args.tgt_tokenizer,
         "model": args.tgt_model,
         "start_time": datetime.now().isoformat(),
@@ -147,6 +156,7 @@ def main():
         "atk_params": atk_params,
     }
 
+    print(parameter_js)
     os.makedirs(args.results_dir, exist_ok=True)
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     file_name = f'{args.results_dir}/result_{args.attack}_{timestamp}.json'
@@ -154,7 +164,7 @@ def main():
         json.dump(parameter_js, fout, indent=4)
         fout.write("\n")
 
-    for index, item in enumerate(dataset['test']):
+    for index, item in enumerate(dataset):
         start_time = time.time()
         code = item['code']
         label = item['label']

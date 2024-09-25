@@ -19,7 +19,7 @@ class CodeAttack(Attack):
     Year: 2023.
     '''
 
-    def __init__(self, model, tokenizer, lang, max_iter=100, top_k=60):
+    def __init__(self, model, tokenizer, lang, max_iter=100, top_k=60, block_size=510):
         super().__init__("CodeAttack", model, tokenizer, lang)
         self.item = {}
         self.model_mlm = RobertaForMaskedLM.from_pretrained("microsoft/codebert-base-mlm").to(self.device)
@@ -27,9 +27,10 @@ class CodeAttack(Attack):
         self.config_mlm = RobertaConfig.from_pretrained("microsoft/codebert-base-mlm")
         self.max_iter = max_iter
         self.top_k = top_k
+        self.block_size = block_size
 
     def forward(self, code=None, label=None, *args, **kwargs):
-        tokens = self.tokenizer([code], return_tensors="pt", truncation=True, padding='max_length').to(self.device)
+        tokens = self.tokenizer([code], return_tensors="pt", truncation=True, padding='max_length', max_length=self.block_size).to(self.device)
         logits = self.model(**tokens).logits
         logits = F.sigmoid(logits)
         logits = torch.Tensor.cpu(logits).detach().numpy()[0]
@@ -152,7 +153,8 @@ class CodeAttack(Attack):
                                                                                                             self.tokenizer,
                                                                                                             label,
                                                                                                             pred_logits,
-                                                                                                            self.device)
+                                                                                                            self.device,
+                                                                                                            self.block_size)
         self.item["query_time"] += query_count
         if importance_score is None:
             self.item["is_attack"] = False
@@ -189,7 +191,7 @@ class CodeAttack(Attack):
             candidate = None
             for index, substitute in enumerate(all_substitues):
                 temp_code = get_example(final_code, tgt_word, substitute, self.lang)
-                new_feature = self.tokenizer([temp_code], return_tensors="pt", truncation=True, padding='max_length').to(self.device)
+                new_feature = self.tokenizer([temp_code], return_tensors="pt", truncation=True, padding='max_length', max_length=self.block_size).to(self.device)
                 logits = self.model(**new_feature).logits
                 self.item["query_time"] += 1
                 logits = F.sigmoid(logits)

@@ -6,6 +6,7 @@ import random
 import torch.nn.functional as F
 import copy
 from .run_parser import get_example_batch
+import pdb
 
 
 python_keywords = ['import', '', '[', ']', ':', ',', '.', '(', ')', '{', '}', 'not', 'is', '=', "+=", '-=', "<", ">",
@@ -425,7 +426,7 @@ def getUID(_tokens=[], uids=[]):
     return ids
 
 
-def get_importance_score(words_list: list, variable_names: list, tgt_model, tokenizer, label, ori_prob, device):
+def get_importance_score(words_list: list, variable_names: list, tgt_model, tokenizer, label, ori_prob, device, block_size=510):
     """Compute the importance score of each variable"""
     # 1. filter all keywords.
     positions = get_identifier_posistions_from_code(words_list, variable_names)
@@ -437,7 +438,7 @@ def get_importance_score(words_list: list, variable_names: list, tgt_model, toke
     masked_token_list, replace_token_positions = get_masked_code_by_position(words_list, positions)
     for index, tokens in enumerate([words_list] + masked_token_list):
         new_code = ' '.join(tokens)
-        new_feature = tokenizer([new_code], return_tensors="pt", truncation=True, padding='max_length').to(device)
+        new_feature = tokenizer([new_code], return_tensors="pt", truncation=True, padding='max_length', max_length=block_size).to(device)
         logits = tgt_model(**new_feature).logits
         logits = F.sigmoid(logits)
         logits = torch.Tensor.cpu(logits).detach().numpy()[0]
@@ -467,7 +468,7 @@ def get_changed_code_by_position(tokens: list, positions: dict):
     return masked_token_list, replace_token_positions
 
 
-def get_importance_score_fooler(words_list: list, variable_names: list, tgt_model, tokenizer, label, ori_logits, device):
+def get_importance_score_fooler(words_list: list, variable_names: list, tgt_model, tokenizer, label, ori_logits, device, block_size=510):
     """Compute the importance score of each variable"""
     # 1. filter all keywords.
     positions = get_identifier_posistions_from_code(words_list, variable_names)
@@ -479,7 +480,7 @@ def get_importance_score_fooler(words_list: list, variable_names: list, tgt_mode
     deleted_token_list, replace_token_positions = get_changed_code_by_position(words_list, positions)
     for index, tokens in enumerate([words_list] + deleted_token_list):
         new_code = ' '.join(tokens)
-        new_feature = tokenizer([new_code], return_tensors="pt", truncation=True, padding='max_length').to(device)
+        new_feature = tokenizer([new_code], return_tensors="pt", truncation=True, padding='max_length', max_length=block_size).to(device)
         logits = tgt_model(**new_feature).logits
         logits = F.sigmoid(logits)
         logits = torch.Tensor.cpu(logits).detach().numpy()[0]
@@ -490,7 +491,7 @@ def get_importance_score_fooler(words_list: list, variable_names: list, tgt_mode
     return importance_score, replace_token_positions, positions, len(importance_score)
 
 
-def get_importance_score_code(words_list: list, variable_names: list, tgt_model, tokenizer, label, ori_logits, device):
+def get_importance_score_code(words_list: list, variable_names: list, tgt_model, tokenizer, label, ori_logits, device, block_size):
     """Compute the influence score of each variable"""
     # 1. filter all keywords.
     positions = get_identifier_posistions_from_code(words_list, variable_names)
@@ -502,7 +503,7 @@ def get_importance_score_code(words_list: list, variable_names: list, tgt_model,
     masked_token_list, replace_token_positions = get_mask_code_by_positions_codeattack(words_list, positions)
     for index, tokens in enumerate([words_list] + masked_token_list):
         new_code = ' '.join(tokens)
-        new_feature = tokenizer([new_code], return_tensors="pt", truncation=True, padding='max_length').to(device)
+        new_feature = tokenizer([new_code], return_tensors="pt", truncation=True, padding='max_length', max_length=block_size).to(device)
         logits = tgt_model(**new_feature).logits
         logits = F.sigmoid(logits)
         logits = torch.Tensor.cpu(logits).detach().numpy()[0]

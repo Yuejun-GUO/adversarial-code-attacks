@@ -25,7 +25,7 @@ class CodeFooler(Attack):
                  max_iter=100,
                  import_score_threshold=-1,
                  sim_score_threshold=0.7,
-                 synonym_num=50):
+                 synonym_num=50, block_size=510):
         '''
         :param import_score_threshold: Required mininum importance score
         :param sim_score_threshold: Required minimum semantic similarity score
@@ -41,9 +41,10 @@ class CodeFooler(Attack):
         self.import_score_threshold = import_score_threshold
         self.sim_score_threshold = sim_score_threshold
         self.synonym_num = synonym_num
+        self.block_size = block_size
 
     def forward(self, code=None, label=None, *args, **kwargs):
-        tokens = self.tokenizer([code], return_tensors="pt", truncation=True, padding='max_length').to(self.device)
+        tokens = self.tokenizer([code], return_tensors="pt", truncation=True, padding='max_length', max_length=self.block_size).to(self.device)
         logits = self.model(**tokens).logits
         logits = F.sigmoid(logits)
         logits = torch.Tensor.cpu(logits).detach().numpy()[0]
@@ -174,7 +175,8 @@ class CodeFooler(Attack):
                                                                                                             self.tokenizer,
                                                                                                             label,
                                                                                                             logits,
-                                                                                                            self.device)
+                                                                                                            self.device,
+                                                                                                            self.block_size)
         self.item["query_time"] += query_count
         if importance_score is None:
             self.item["is_attack"] = False
@@ -212,7 +214,7 @@ class CodeFooler(Attack):
             candidate = None
             for index, substitute in enumerate(all_substitues):
                 temp_code = get_example(final_code, tgt_word, substitute, self.lang)
-                new_feature = self.tokenizer([temp_code], return_tensors="pt", truncation=True, padding='max_length').to(self.device)
+                new_feature = self.tokenizer([temp_code], return_tensors="pt", truncation=True, padding='max_length', max_length=self.block_size).to(self.device)
                 logits = self.model(**new_feature).logits
                 self.item["query_time"] += 1
                 logits = F.sigmoid(logits)

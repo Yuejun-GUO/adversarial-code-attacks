@@ -21,7 +21,7 @@ class MHM(Attack):
     Year: 2020.
     '''
 
-    def __init__(self, model, tokenizer, lang, max_iter=100, top_k=60, _n_candi=30, _prob_threshold=1):
+    def __init__(self, model, tokenizer, lang, max_iter=100, top_k=60, _n_candi=30, _prob_threshold=1, block_size=510):
         super().__init__("MHM Origin attack", model, tokenizer, lang)
         self.item = {}
         self.max_iter = max_iter
@@ -30,9 +30,10 @@ class MHM(Attack):
         self._prob_threshold = _prob_threshold
         self.model_mlm = RobertaForMaskedLM.from_pretrained("microsoft/codebert-base-mlm").to(self.device)
         self.tokenizer_mlm = RobertaTokenizer.from_pretrained("microsoft/codebert-base-mlm")
+        self.block_size = block_size
 
     def forward(self, code=None, label=None, *args, **kwargs):
-        tokens = self.tokenizer([code], return_tensors="pt", truncation=True, padding='max_length').to(self.device)
+        tokens = self.tokenizer([code], return_tensors="pt", truncation=True, padding='max_length', max_length=self.block_size).to(self.device)
         logits = self.model(**tokens).logits
         logits = F.sigmoid(logits)
         logits = torch.Tensor.cpu(logits).detach().numpy()[0]
@@ -194,7 +195,7 @@ class MHM(Attack):
             min_prob = 1.0
             for idx, temp_code in enumerate(candi_tokens):
                 new_feature = self.tokenizer([temp_code], return_tensors="pt", truncation=True,
-                                             padding='max_length').to(self.device)
+                                             padding='max_length, max_length=self.block_size').to(self.device)
                 logits = self.model(**new_feature).logits
                 self.item["query_time"] += 1
                 logits = F.sigmoid(logits)

@@ -2,8 +2,11 @@
 parser/tree-sitter-c
 parser/tree-sitter-java
 parser/tree-sitter-python
+test_dm.py
 *.json
 .DS_Store
+run1.sh
+results
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

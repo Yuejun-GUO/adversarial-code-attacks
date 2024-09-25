@@ -16,16 +16,17 @@ class GreedyAttack(Attack):
     Greedy attack.
     '''
 
-    def __init__(self, model, tokenizer, lang, max_iter=100, top_k=100):
+    def __init__(self, model, tokenizer, lang, max_iter=100, top_k=100, block_size=510):
         super().__init__("Greedy Attack", model, tokenizer, lang)
         self.item = {}
         self.max_iter = max_iter
         self.top_k = top_k
         self.codebert_mlm = RobertaForMaskedLM.from_pretrained("microsoft/codebert-base-mlm").to(self.device)
         self.tokenizer_mlm = RobertaTokenizer.from_pretrained("microsoft/codebert-base-mlm")
+        self.block_size = block_size
 
     def forward(self, code=None, label=None, *args, **kwargs):
-        tokens = self.tokenizer([code], return_tensors="pt", truncation=True, padding='max_length').to(self.device)
+        tokens = self.tokenizer([code], return_tensors="pt", truncation=True, padding='max_length', max_length=self.block_size).to(self.device)
         logits = self.model(**tokens).logits
         logits = F.sigmoid(logits)
         logits = torch.Tensor.cpu(logits).detach().numpy()[0]
@@ -149,7 +150,8 @@ class GreedyAttack(Attack):
                                                                                                             self.tokenizer,
                                                                                                             label,
                                                                                                             orig_prob,
-                                                                                                            self.device)
+                                                                                                            self.device,
+                                                                                                            self.block_size)
         self.item["query_time"] += query_count
         if importance_score is None:
             self.item["is_attack"] = False
@@ -170,7 +172,6 @@ class GreedyAttack(Attack):
                 total_score += importance_score[token_pos_to_score_pos[token_pos]]
 
             names_to_importance_score[name] = total_score
-
         sorted_list_of_names = sorted(names_to_importance_score.items(), key=lambda x: x[1], reverse=True)
         # sort according to importance_score
 
@@ -186,7 +187,7 @@ class GreedyAttack(Attack):
             candidate = None
             for index, substitute in enumerate(all_substitues):
                 temp_code = get_example(final_code, tgt_word, substitute, self.lang)
-                new_feature = self.tokenizer([temp_code], return_tensors="pt", truncation=True, padding='max_length').to(self.device)
+                new_feature = self.tokenizer([temp_code], return_tensors="pt", truncation=True, padding='max_length', max_length=self.block_size).to(self.device)
                 logits = self.model(**new_feature).logits
                 self.item["query_time"] += 1
                 logits = F.sigmoid(logits)

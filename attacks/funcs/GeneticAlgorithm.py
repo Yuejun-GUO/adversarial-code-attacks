@@ -15,7 +15,7 @@ class GeneticAlgorithm(Attack):
     '''
     Generaric algorithm attack.
     '''
-    def __init__(self, model, tokenizer, lang, max_iter=100, top_k=100, max_iter_mutant=10, cross_probability=0.7):
+    def __init__(self, model, tokenizer, lang, max_iter=100, top_k=100, max_iter_mutant=10, cross_probability=0.7, block_size=510):
         super().__init__("GeneticAlgorithm", model, tokenizer, lang)
         self.item = {}
         self.max_iter = max_iter
@@ -24,9 +24,10 @@ class GeneticAlgorithm(Attack):
         self.cross_probability = cross_probability
         self.codebert_mlm = RobertaForMaskedLM.from_pretrained("microsoft/codebert-base-mlm").to(self.device)
         self.tokenizer_mlm = RobertaTokenizer.from_pretrained("microsoft/codebert-base-mlm")
+        self.block_size = block_size
 
     def forward(self, code=None, label=None, initial_replace=None, *args, **kwargs):
-        tokens = self.tokenizer([code], return_tensors="pt", truncation=True, padding='max_length').to(self.device)
+        tokens = self.tokenizer([code], return_tensors="pt", truncation=True, padding='max_length', max_length=self.block_size).to(self.device)
         logits = self.model(**tokens).logits
         logits = F.sigmoid(logits)
         logits = torch.Tensor.cpu(logits).detach().numpy()[0]
@@ -161,7 +162,7 @@ class GeneticAlgorithm(Attack):
                 for a_substitue in variable_substitue_dict[tgt_word]:
                     temp_code = get_example(code, tgt_word, a_substitue, self.lang)
                     new_feature = self.tokenizer([temp_code], return_tensors="pt", truncation=True,
-                                                 padding='max_length').to(self.device)
+                                                 padding='max_length', max_length=self.block_size).to(self.device)
                     logits = self.model(**new_feature).logits
                     self.item["query_time"] += 1
                     logits = F.sigmoid(logits)
@@ -205,7 +206,7 @@ class GeneticAlgorithm(Attack):
             for mutant in _temp_mutants:
                 _temp_code = map_chromesome(mutant, code, self.lang)
                 new_feature = self.tokenizer([_temp_code], return_tensors="pt", truncation=True,
-                                             padding='max_length').to(self.device)
+                                             padding='max_length', max_length=self.block_size).to(self.device)
                 logits = self.model(**new_feature).logits
                 self.item["query_time"] += 1
                 logits = F.sigmoid(logits)
@@ -234,7 +235,7 @@ class GeneticAlgorithm(Attack):
     def compute_fitness(self, chromesome, orig_prob, orig_label, code):
         temp_code = map_chromesome(chromesome, code, self.lang)
         new_feature = self.tokenizer([temp_code], return_tensors="pt", truncation=True,
-                                     padding='max_length').to(self.device)
+                                     padding='max_length', max_length=self.block_size).to(self.device)
         logits = self.model(**new_feature).logits
         logits = F.sigmoid(logits)
         logits = torch.Tensor.cpu(logits).detach().numpy()[0]
