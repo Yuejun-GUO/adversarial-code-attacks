@@ -195,7 +195,7 @@ class MHM(Attack):
             min_prob = 1.0
             for idx, temp_code in enumerate(candi_tokens):
                 new_feature = self.tokenizer([temp_code], return_tensors="pt", truncation=True,
-                                             padding='max_length, max_length=self.block_size').to(self.device)
+                                             padding='max_length', max_length=self.block_size).to(self.device)
                 logits = self.model(**new_feature).logits
                 self.item["query_time"] += 1
                 logits = F.sigmoid(logits)
