@@ -1,12 +1,18 @@
-.idea
+
 parser/tree-sitter-c
 parser/tree-sitter-java
 parser/tree-sitter-python
 test_dm.py
+test_acc.py
 *.json
 .DS_Store
 run1.sh
 results
+aa.py
+*.sh
+
+.idea
+.DS_Store
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

@@ -23,7 +23,7 @@ def lang_case_insensitive_choices(value):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--attack", type=str, default="codeattack",
+    parser.add_argument("--attack", type=str, default="greedy",
                         choices=['greedy', 'mhm', 'ga', 'alert', 'codefooler', 'codeattack'])
     parser.add_argument("--test_dataset", type=str, default="Zaib/java-vulnerability",
                         help="Dataset card on hugginface.")
@@ -33,6 +33,9 @@ def main():
                         help="The tokniezer of target model.")
     parser.add_argument("--tgt_model", type=str, default="mrm8488/codebert-base-finetuned-detect-insecure-code",
                         help="Model card on huggingface for vulnerability detection.")
+    parser.add_argument("--block_size", default=510, type=int,
+                        help="Optional input sequence length after tokenization."
+                             "The training dataset will be truncated in block of this size for training.")
     parser.add_argument("--max_iter", type=int, default=100,
                         help="Apply to all attacks. Maximum number of attack iterations.")
     parser.add_argument("--top_k", type=int, default=60,
@@ -75,15 +78,19 @@ def main():
 
     if not args.tgt_tokenizer:
         args.tgt_tokenizer = args.tgt_model
-    tokenizer = AutoTokenizer.from_pretrained(args.tgt_tokenizer)
-    model = AutoModelForSequenceClassification.from_pretrained(args.tgt_model).to(device)
+    tokenizer = AutoTokenizer.from_pretrained(args.tgt_tokenizer, trust_remote_code=True)
+    model = AutoModelForSequenceClassification.from_pretrained(args.tgt_model, trust_remote_code=True).to(device)
+    if args.block_size <= 0:
+        args.block_size = tokenizer.max_len_single_sentence
+    args.block_size = min(args.block_size, tokenizer.max_len_single_sentence)
 
     if args.attack.lower() == "mhm":
         atk = MHM(model, tokenizer, args.data_lang,
                   max_iter=args.max_iter,
                   top_k=args.top_k,
                   _n_candi=args.n_candi,
-                  _prob_threshold=args.prob_threshold
+                  _prob_threshold=args.prob_threshold,
+                  block_size=args.block_size
                   )
         atk_params = {
             "max_iter": args.max_iter,
@@ -94,7 +101,9 @@ def main():
     elif args.attack.lower() == "greedy":
         atk = GreedyAttack(model, tokenizer, args.data_lang,
                            max_iter=args.max_iter,
-                           top_k=args.top_k)
+                           top_k=args.top_k,
+                           block_size=args.block_size
+                           )
         atk_params = {
             "max_iter": args.max_iter,
             "top_k": args.top_k,
@@ -104,7 +113,9 @@ def main():
                                max_iter=args.max_iter,
                                top_k=args.top_k,
                                max_iter_mutant=args.max_iter_mutant,
-                               cross_probability=args.cross_probability)
+                               cross_probability=args.cross_probability,
+                               block_size=args.block_size
+                               )
         atk_params = {
             "max_iter": args.max_iter,
             "top_k": args.top_k,
@@ -116,7 +127,9 @@ def main():
                     max_iter=args.max_iter,
                     top_k=args.top_k,
                     max_iter_mutant=args.max_iter_mutant,
-                    cross_probability=args.cross_probability,)
+                    cross_probability=args.cross_probability,
+                    block_size=args.block_size
+                    )
         atk_params = {
             "max_iter": args.max_iter,
             "top_k": args.top_k,
@@ -125,7 +138,9 @@ def main():
         }
     elif args.attack.lower() == "codeattack":
         atk = CodeAttack(model, tokenizer, args.data_lang,
-                         max_iter=args.max_iter,)
+                         max_iter=args.max_iter,
+                         block_size=args.block_size
+                         )
         atk_params = {
             "max_iter": args.max_iter,
             "top_k": args.top_k,
@@ -135,7 +150,9 @@ def main():
                          max_iter=args.max_iter,
                          import_score_threshold=args.import_score_threshold,
                          sim_score_threshold=args.sim_score_threshold,
-                         synonym_num=args.synonym_num)
+                         synonym_num=args.synonym_num,
+                         block_size=args.block_size
+                         )
         atk_params = {
             "max_iter": args.max_iter,
             "import_score_threshold": args.import_score_threshold,
@@ -150,6 +167,7 @@ def main():
         "test_size": len(dataset),
         "tokenizer": args.tgt_tokenizer,
         "model": args.tgt_model,
+        "block_size": args.block_size,
         "start_time": datetime.now().isoformat(),
         "programming language": args.data_lang,
         "attack method": atk.name,
@@ -160,20 +178,20 @@ def main():
     os.makedirs(args.results_dir, exist_ok=True)
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     file_name = f'{args.results_dir}/result_{args.attack}_{timestamp}.json'
-    with open(file_name, 'w') as fout:
-        json.dump(parameter_js, fout, indent=4)
-        fout.write("\n")
 
+    results_js = {}
     for index, item in enumerate(dataset):
+        print(index)
         start_time = time.time()
         code = item['code']
         label = item['label']
         result = atk(code, label)
         result = {"index": int(index), 'run_time_seconds': time.time() - start_time, **result}
-        with open(file_name, 'a') as fout:
-            json.dump(result, fout, indent=4)
-            fout.write("\n")
-            fout.flush()
+        results_js[int(index)] =  result
+
+    with open(file_name, 'w') as fout:
+        json.dump({"params": parameter_js, "results": results_js}, fout, indent=4)
+        fout.write("\n")
 
 
 if __name__ == '__main__':

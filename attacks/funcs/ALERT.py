@@ -12,16 +12,17 @@ class ALERT(Attack):
     Year: 2022.
     '''
 
-    def __init__(self, model, tokenizer, lang, max_iter=100, top_k=100, max_iter_mutant=10, cross_probability=0.7):
+    def __init__(self, model, tokenizer, lang, max_iter=100, top_k=100, max_iter_mutant=10, cross_probability=0.7, block_size=510):
         super().__init__("ALERT", model, tokenizer, lang)
         self.max_iter = max_iter
         self.top_k = top_k
         self.max_iter_mutant = max_iter_mutant
         self.cross_probability = cross_probability
+        self.block_size = block_size
 
     def forward(self, code=None, label=None, *args, **kwargs):
-        atk_1 = GreedyAttack(self.model, self.tokenizer, self.lang, int(np.ceil(self.max_iter/2)), self.top_k)
-        atk_2 = GeneticAlgorithm(self.model, self.tokenizer, self.lang, self.max_iter-int(np.ceil(self.max_iter/2)), self.top_k, self.max_iter_mutant, self.cross_probability)
+        atk_1 = GreedyAttack(self.model, self.tokenizer, self.lang, int(np.ceil(self.max_iter/2)), self.top_k, self.block_size)
+        atk_2 = GeneticAlgorithm(self.model, self.tokenizer, self.lang, self.max_iter-int(np.ceil(self.max_iter/2)), self.top_k, self.max_iter_mutant, self.cross_probability, self.block_size)
         result_1 = atk_1(code, label)
         if result_1['is_attack'] and not result_1['is_success']:
             initial_replace = result_1['replaced_words']
