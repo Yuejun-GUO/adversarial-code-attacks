@@ -27,6 +27,13 @@ torch
 numpy
 ```
 
+If the built file "parser/my-languages.so" doesn't work for you, please rebuild as the following command:
+
+```bash
+cd parser
+bash build.sh
+```
+
 ### Attacks, data, models
 
 #### Adversarial attacks
