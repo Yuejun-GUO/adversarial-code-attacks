@@ -279,7 +279,7 @@ bash build.sh
     <td style="text-align: center;">54.06</td>
     <td style="text-align: center;">100</td>
     <td style="text-align: center;">100</td>
-    <td style="text-align: center;"></td>
+    <td style="text-align: center;">100</td>
     <td style="text-align: center;">100</td>
     <td style="text-align: center;">100</td>
     <td style="text-align: center;">100</td>
@@ -289,7 +289,7 @@ bash build.sh
     <td style="text-align: center;">51.02</td>
     <td style="text-align: center;">68.06</td>
     <td style="text-align: center;">89.72</td>
-    <td style="text-align: center;"></td>
+    <td style="text-align: center;">75.26</td>
     <td style="text-align: center;">71.81</td>
     <td style="text-align: center;">56.83</td>
     <td style="text-align: center;">79.22</td>
@@ -299,7 +299,7 @@ bash build.sh
     <td style="text-align: center;">54.14</td>
     <td style="text-align: center;">88.77</td>
     <td style="text-align: center;">96.76</td>
-    <td style="text-align: center;"></td>
+    <td style="text-align: center;">91.87</td>
     <td style="text-align: center;">89.33</td>
     <td style="text-align: center;">77.61</td>
     <td style="text-align: center;">91.67</td>
@@ -307,5 +307,6 @@ bash build.sh
 </table>
 
 
+---------------------------------------------------------------
 ### Acknowledge
 This project is supported by the Google Cloud Research Credits.
