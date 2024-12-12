@@ -44,7 +44,7 @@ bash build.sh
   - parameters: 
     
     - ```max_iter```: the maximum number of attack iterations.
-    - ```top_k```: the [masked language modeling (MLM)](https://huggingface.co/docs/transformers/en/tasks/masked_language_modeling) is used to generate natural substitutes of each token. 
+    - ```top_k```: the [masked language modeling (MLM)](https://huggingface.co/docs/transformers/en/tasks/masked_language_modeling) is used to generate natural substitutes of each token. This parameter determines that the top ```k``` probable ones will be used as substitutes.
 
   - usage:
   ```commandline
@@ -62,7 +62,7 @@ bash build.sh
   - parameters: 
     
     - ```max_iter```: the maximum number of attack iterations.
-    - ```top_k```: the [masked language modeling (MLM)](https://huggingface.co/docs/transformers/en/tasks/masked_language_modeling) is used to generate natural substitutes of each token. 
+    - ```top_k```: the [masked language modeling (MLM)](https://huggingface.co/docs/transformers/en/tasks/masked_language_modeling) is used to generate natural substitutes of each token. This parameter determines that the top ```k``` probable ones will be used as substitutes.
     - ```max_iter_mutant```: the maximum number of iterations to introduce mutants (variations) in the population.
     - ```cross_probability```: the probability of applying the crossover operation to two parent solutions.
 
@@ -85,7 +85,7 @@ bash build.sh
   - parameters: 
     
     - ```max_iter```: the maximum number of attack iterations.
-    - ```top_k```: the [masked language modeling (MLM)](https://huggingface.co/docs/transformers/en/tasks/masked_language_modeling) is used to generate natural substitutes of each token. 
+    - ```top_k```: the [masked language modeling (MLM)](https://huggingface.co/docs/transformers/en/tasks/masked_language_modeling) is used to generate natural substitutes of each token. This parameter determines that the top ```k``` probable ones will be used as substitutes.
     - ```max_iter_mutant```: the maximum number of iterations to introduce mutants (variations) in the population.
     - ```cross_probability```: the probability of applying the crossover operation to two parent solutions.
 
@@ -107,7 +107,7 @@ bash build.sh
 
   - parameters: 
     - ```max_iter```: the maximum number of attack iterations.
-    - ```top_k```: the [masked language modeling (MLM)](https://huggingface.co/docs/transformers/en/tasks/masked_language_modeling) is used to generate natural substitutes of each token. 
+    - ```top_k```: the [masked language modeling (MLM)](https://huggingface.co/docs/transformers/en/tasks/masked_language_modeling) is used to generate natural substitutes of each token. This parameter determines that the top ```k``` probable ones will be used as substitutes.
     - ```sim_score_threshold```:  threshold that determines the minimum cosine similarity between a given variable name and its potential substitute.
     - ```synonym_num```: the number of closest subsitutes according to the cosine similarity between a given variable name and others in the vocabulary.
 
@@ -129,7 +129,7 @@ bash build.sh
 
   - parameters: 
     - ```max_iter```: the maximum number of attack iterations.
-    - ```top_k```: the [masked language modeling (MLM)](https://huggingface.co/docs/transformers/en/tasks/masked_language_modeling) is used to generate natural substitutes of each token. 
+    - ```top_k```: the [masked language modeling (MLM)](https://huggingface.co/docs/transformers/en/tasks/masked_language_modeling) is used to generate natural substitutes of each token. This parameter determines that the top ```k``` probable ones will be used as substitutes.
 
   - usage:
   ```commandline
@@ -147,7 +147,7 @@ bash build.sh
 
   - parameters: 
     - ```max_iter```: the maximum number of attack iterations.
-    - ```top_k```: the [masked language modeling (MLM)](https://huggingface.co/docs/transformers/en/tasks/masked_language_modeling) is used to generate natural substitutes of each token. 
+    - ```top_k```: the [masked language modeling (MLM)](https://huggingface.co/docs/transformers/en/tasks/masked_language_modeling) is used to generate natural substitutes of each token. This parameter determines that the top ```k``` probable ones will be used as substitutes.
     - ```n_candi```: the number of candidate substitutes.
     - ```prob_threshold```: the threshold of the acceptance rate.
 
